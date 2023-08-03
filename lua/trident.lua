@@ -46,6 +46,7 @@ local H = {
     mark_branch = true,
     excluded_filetypes = {},
   },
+  projects = {},
 }
 
 local api = vim.api
@@ -62,6 +63,10 @@ end
 
 function H.info(msg)
   H.notify(msg, vim.log.levels.INFO)
+end
+
+function H.debug(msg)
+  H.notify(msg, vim.log.levels.DEBUG)
 end
 
 function H.close_menu()
@@ -186,6 +191,108 @@ function H.filter_file()
   return true
 end
 
+function H.get_bufname()
+  return vim.fs.normalize(api.nvim_buf_get_name(0))
+end
+
+function H.branch_key()
+  local branch
+  ---@diagnostic disable-next-line
+  local gitsigns = vim.b.gitsigns_status_dict
+  if gitsigns then
+    branch = gitsigns.head
+  else
+    local obj = vim.system({ 'git', 'rev-parse', '--abbrev-ref', 'HEAD' }, { text = true }):wait()
+    branch = obj.stdout
+    if branch == 'HEAD' then
+      obj = vim.system({ 'git', 'rev-parse', '--short', 'HEAD' }, { text = true }):wait()
+      branch = obj.stdout
+    end
+  end
+  if branch then
+    -- NOTE: delete on stable
+    return (vim.uv and vim.uv.cwd or vim.loop.cwd)() .. ':' .. branch
+  else
+    return H.project_key()
+  end
+end
+
+function H.project_key()
+  return (vim.uv and vim.uv.cwd or vim.loop.cwd)()
+end
+
+function H.get_mark_key()
+  if H.config.mark_branch then
+    return H.branch_key()
+  else
+    return H.project_key()
+  end
+end
+
+function H.get_project()
+  local key = H.get_mark_key()
+  return H.projects[key]
+end
+
+function H.get_marks()
+  local project = H.get_project()
+  return project and project.marks
+end
+
+function H.get_index_of(item)
+  local filename = vim.fs.normalize(item)
+  local marks = H.get_marks()
+  if marks == nil then
+    return nil
+  end
+
+  for i, v in ipairs(marks) do
+    if v.filename == filename then
+      return i
+    end
+  end
+  return nil
+end
+
+function H.get_marked_filename(idx)
+  local marks = H.get_marks()
+  return marks and marks[idx] and marks[idx].filename
+end
+
+function H.valid_index(idx)
+  if idx == nil then
+    return false
+  end
+
+  local filename = H.get_marked_filename(idx)
+  return filename ~= nil and filename ~= ''
+end
+
+function H.validate_bufname(bufname)
+  local valid = bufname ~= nil or bufname ~= ''
+  if not valid then
+    H.error('cannot find a valid file name to mark')
+  end
+  return valid
+end
+
+function H.create_mark(filename)
+  local cursor = api.nvim_win_get_cursor(0)
+  local marks = H.get_marks()
+  if marks == nil then
+    local project = H.get_project()
+    if project == nil then
+      H.projects[H.get_mark_key()] = { marks = {} }
+      marks = H.projects[H.get_mark_key()].marks
+    end
+  end
+  table.insert(marks, { filename = filename, row = cursor[1], col = cursor[2] })
+end
+
+function H.emit_changed()
+  H.info(vim.inspect(H.projects))
+end
+
 function Trident.toggle_menu()
   if H.winid ~= -1 and api.nvim_win_is_valid(H.winid) then
     H.close_menu()
@@ -196,10 +303,19 @@ function Trident.toggle_menu()
   H.trigger_event('TridentWindowOpen', { bufnr = H.bufnr, winid = H.winid })
 end
 
-function Trident.add_file(name_or_id)
+function Trident.add_file()
   if not H.filter_file() then
     return
   end
+  local bufname = H.get_bufname()
+  if H.valid_index(H.get_index_of(bufname)) then
+    return
+  end
+
+  H.validate_bufname(bufname)
+
+  H.create_mark(bufname)
+  H.emit_changed()
 end
 
 return Trident
