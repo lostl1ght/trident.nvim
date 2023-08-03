@@ -197,17 +197,11 @@ end
 
 function H.branch_key()
   local branch
-  ---@diagnostic disable-next-line
-  local gitsigns = vim.b.gitsigns_status_dict
-  if gitsigns then
-    branch = gitsigns.head
-  else
-    local obj = vim.system({ 'git', 'rev-parse', '--abbrev-ref', 'HEAD' }, { text = true }):wait()
+  local obj = vim.system({ 'git', 'rev-parse', '--abbrev-ref', 'HEAD' }, { text = true }):wait()
+  branch = obj.stdout
+  if branch == 'HEAD' then
+    obj = vim.system({ 'git', 'rev-parse', '--short', 'HEAD' }, { text = true }):wait()
     branch = obj.stdout
-    if branch == 'HEAD' then
-      obj = vim.system({ 'git', 'rev-parse', '--short', 'HEAD' }, { text = true }):wait()
-      branch = obj.stdout
-    end
   end
   if branch then
     -- NOTE: delete on stable
