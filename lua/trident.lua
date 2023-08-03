@@ -50,6 +50,20 @@ local H = {
 
 local api = vim.api
 
+---@param msg any
+---@param level integer
+function H.notify(msg, level)
+  vim.notify(msg, level, { title = 'Trident' })
+end
+
+function H.error(msg)
+  H.notify(msg, vim.log.levels.ERROR)
+end
+
+function H.info(msg)
+  H.notify(msg, vim.log.levels.INFO)
+end
+
 function H.close_menu()
   -- save marks
   api.nvim_win_close(H.winid, true)
@@ -158,15 +172,16 @@ function H.filter_file()
   local bt = api.nvim_get_option_value('buftype', { scope = 'local' })
   local exft = H.config.excluded_filetypes
   if ft == 'trident' then
-    vim.notify('cannot add trident to trident', vim.log.levels.ERROR, { title = 'Trident' })
+    H.error('cannot add trident to trident')
     return false
   end
   if bt ~= '' then
-    vim.notify('can only add regular files to trident', vim.log.levels.ERROR, { title = 'Trident' })
+    H.error('can only add regular files to trident')
     return false
   end
   if vim.tbl_contains(exft, ft) then
-    vim.notify('this filetype is excluded', vim.log.levels.ERROR, { title = 'Trident' })
+    H.error('this filetype is excluded')
+    return false
   end
   return true
 end
