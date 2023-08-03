@@ -301,7 +301,7 @@ function H.branch_key()
   end
   if branch then
     -- NOTE: delete on stable
-    return (vim.uv and vim.uv.cwd or vim.loop.cwd)() .. ':' .. branch
+    return (vim.uv and vim.uv.cwd or vim.loop.cwd)() .. ':' .. branch:gsub('\n', '')
   else
     return H.project_key()
   end
