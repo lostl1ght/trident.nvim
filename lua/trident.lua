@@ -44,6 +44,7 @@ local H = {
   config = {
     mark_branch = true,
     excluded_filetypes = {},
+    data_path = vim.fs.normalize(vim.fn.stdpath('data') .. '/trident.json'),
   },
   projects = {},
   pattern = '^/.-/.-/()',
@@ -51,6 +52,8 @@ local H = {
 }
 
 local api = vim.api
+-- NOTE: update on stable
+local uv = vim.uv or vim.loop
 
 ---@param msg any
 ---@param level integer
@@ -300,15 +303,14 @@ function H.branch_key()
     branch = obj.stdout
   end
   if branch then
-    -- NOTE: delete on stable
-    return (vim.uv and vim.uv.cwd or vim.loop.cwd)() .. ':' .. branch:gsub('\n', '')
+    return uv.cwd() .. ':' .. branch:gsub('\n', '')
   else
     return H.project_key()
   end
 end
 
 function H.project_key()
-  return (vim.uv and vim.uv.cwd or vim.loop.cwd)()
+  return uv.cwd()
 end
 
 function H.get_mark_key()
@@ -380,12 +382,45 @@ function H.create_mark(filename)
 end
 
 function H.emit_changed()
-  H.info(vim.inspect(H.projects))
+  H.save()
 end
 
 function H.remove_mark(index)
   local marks = H.get_marks()
   table.remove(marks, index)
+end
+
+function H.read_data()
+  local fd = assert(uv.fs_open(H.config.data_path, 'r', 438))
+  local stat = assert(uv.fs_fstat(fd))
+  local data = assert(uv.fs_read(fd, stat.size, 0))
+  assert(uv.fs_close(fd))
+  return vim.json.decode(data)
+end
+
+function H.refresh()
+  local key = H.get_mark_key()
+  local current_project = {
+    [key] = vim.deepcopy(H.projects[key]),
+  }
+  H.projects = nil
+
+  local ok, on_disk_project = pcall(H.read_data)
+  if not ok then
+    on_disk_project = {}
+  end
+  H.projects = vim.tbl_deep_extend('force', on_disk_project, current_project)
+end
+
+function H.write_data()
+  local fd = assert(uv.fs_open(H.config.data_path, 'w', 438))
+  assert(uv.fs_write(fd, vim.fn.json_encode(H.projects)))
+  assert(uv.fs_close(fd))
+end
+
+function H.save()
+  H.refresh()
+  H.write_data()
 end
 
 function Trident.toggle_menu()
@@ -422,6 +457,14 @@ function Trident.rm_file()
   end
   H.remove_mark(idx)
   H.emit_changed()
+end
+
+function Trident.setup(opts)
+  local ok, on_disk_project = pcall(H.read_data)
+  if not ok then
+    on_disk_project = {}
+  end
+  H.projects = on_disk_project
 end
 
 return Trident
