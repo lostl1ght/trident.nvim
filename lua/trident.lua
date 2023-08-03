@@ -161,12 +161,12 @@ function H.filter_file()
     vim.notify('cannot add trident to trident', vim.log.levels.ERROR, { title = 'Trident' })
     return false
   end
-  if vim.tbl_contains(exft, ft) then
-    vim.notify('this filetype is excluded', vim.log.levels.ERROR, { title = 'Trident' })
-  end
   if bt ~= '' then
     vim.notify('can only add regular files to trident', vim.log.levels.ERROR, { title = 'Trident' })
     return false
+  end
+  if vim.tbl_contains(exft, ft) then
+    vim.notify('this filetype is excluded', vim.log.levels.ERROR, { title = 'Trident' })
   end
   return true
 end
