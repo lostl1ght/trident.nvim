@@ -32,9 +32,6 @@ local Trident = {}
       ]
     }
   },
-  "settings": {
-    "mark_branch": true
-  }
 }
 --]]
 
@@ -83,13 +80,25 @@ end
 function H.select_menu_item()
   local idx = vim.fn.line('.')
   H.close_menu()
-  -- TODO: add select
-  vim.notify('idx ' .. idx)
+  Trident.nav_file(idx)
+end
+
+function H.get_or_create_buffer(filename)
+  local buf_exists = vim.fn.bufexists(filename) ~= 0
+  if buf_exists then
+    return vim.fn.bufnr(filename)
+  end
+  return vim.fn.bufadd(filename)
+end
+
+function H.get_mark(idx)
+  local marks = H.get_marks()
+  return marks[idx]
 end
 
 function H.on_menu_save()
-  -- TODO: save
-  vim.notify('save')
+  --  TODO: get updates from ui
+  H.save()
 end
 
 function H.pad_number(n, total)
@@ -332,16 +341,22 @@ function H.get_marks()
 end
 
 function H.get_index_of(item)
-  local filename = vim.fs.normalize(item)
   local marks = H.get_marks()
   if marks == nil then
     return nil
   end
+  if type(item) == 'string' then
+    local filename = vim.fs.normalize(item)
 
-  for i, v in ipairs(marks) do
-    if v.filename == filename then
-      return i
+    for i, v in ipairs(marks) do
+      if v.filename == filename then
+        return i
+      end
     end
+    return nil
+  end
+  if item <= #marks and item >= 1 then
+    return item
   end
   return nil
 end
@@ -395,6 +410,7 @@ function H.read_data()
   local stat = assert(uv.fs_fstat(fd))
   local data = assert(uv.fs_read(fd, stat.size, 0))
   assert(uv.fs_close(fd))
+  ---@diagnostic disable-next-line
   return vim.json.decode(data)
 end
 
@@ -457,6 +473,40 @@ function Trident.rm_file()
   end
   H.remove_mark(idx)
   H.emit_changed()
+end
+
+function Trident.nav_file(id)
+  local idx = H.get_index_of(id)
+  if not H.valid_index(idx) then
+    return
+  end
+
+  local mark = H.get_mark(idx)
+  local filename = vim.fs.normalize(mark.filename)
+  local bufnr = H.get_or_create_buffer(filename)
+  ---@diagnostic disable-next-line
+  local set_row = not api.nvim_buf_is_loaded(bufnr)
+  local old_bufnr = api.nvim_get_current_buf()
+
+  ---@diagnostic disable-next-line
+  api.nvim_set_current_buf(bufnr)
+  api.nvim_set_option_value('buflisted', true, { buf = bufnr })
+
+  if set_row and mark.row and mark.col then
+    ---@diagnostic disable-next-line
+    api.nvim_win_set_cursor(vim.fn.bufwinid(bufnr), { mark.row, mark.col })
+  end
+
+  local old_bufinfo = vim.fn.getbufinfo(old_bufnr)
+  if type(old_bufinfo) == 'table' and #old_bufinfo >= 1 then
+    old_bufinfo = old_bufinfo[1]
+    local no_name = old_bufinfo.name == ''
+    local one_line = old_bufinfo.linecount == 1
+    local unchanged = old_bufinfo.changed == 0
+    if no_name and one_line and unchanged then
+      api.nvim_buf_delete(old_bufnr, {})
+    end
+  end
 end
 
 function Trident.setup(opts)
