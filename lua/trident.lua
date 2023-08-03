@@ -96,8 +96,32 @@ function H.get_mark(idx)
   return marks[idx]
 end
 
+function H.update_from_menu()
+  local lines = api.nvim_buf_get_lines(H.bufnr, 0, -1, false)
+  local key = H.get_mark_key()
+  local marks = H.get_marks()
+  H.projects[key] = { marks = {} }
+  if #lines == 1 and lines[1] == '' or marks == nil then
+    return
+  end
+
+  local new_marks = H.get_marks()
+  for i, line in ipairs(lines) do
+    line = line:gsub(H.pattern, '')
+    local idx = H.get_index_of(line, marks)
+    if H.valid_index(idx) then
+      if i ~= idx then
+        local mark = table.remove(marks, idx)
+        table.insert(new_marks, i, mark)
+      end
+    else
+      H.create_mark(line)
+    end
+  end
+end
+
 function H.on_menu_save()
-  --  TODO: get updates from ui
+  H.update_from_menu()
   H.save()
 end
 
@@ -163,6 +187,12 @@ function H.create_buffer()
     '',
     { noremap = true, desc = 'Nav to file', callback = H.select_menu_item }
   )
+
+  local function modified_callback()
+    local modified = api.nvim_get_option_value('modified', { buf = H.bufnr })
+    local border_hl = modified and 'TridentBorderModified' or 'TridentBorder'
+    H.window_update_highlight(H.winid, 'FloatBorder', border_hl)
+  end
   api.nvim_create_autocmd('BufWriteCmd', {
     buffer = H.bufnr,
     callback = function()
@@ -179,16 +209,14 @@ function H.create_buffer()
           api.nvim_buf_set_lines(H.bufnr, i - 1, i, false, { replacement })
         end
       end
+      api.nvim_set_option_value('modified', false, { buf = H.bufnr })
+      modified_callback()
     end,
   })
   -- TODO: better modified tracking
-  api.nvim_create_autocmd('BufModifiedSet', {
+  api.nvim_create_autocmd({ 'TextChanged', 'TextChangedI', 'TextChangedP' }, {
     buffer = H.bufnr,
-    callback = function()
-      local modified = api.nvim_get_option_value('modified', { buf = H.bufnr })
-      local border_hl = modified and 'TridentBorderModified' or 'TridentBorder'
-      H.window_update_highlight(H.winid, 'FloatBorder', border_hl)
-    end,
+    callback = modified_callback,
   })
   api.nvim_create_autocmd('BufLeave', {
     buffer = H.bufnr,
@@ -340,8 +368,8 @@ function H.get_marks()
   return project and project.marks
 end
 
-function H.get_index_of(item)
-  local marks = H.get_marks()
+function H.get_index_of(item, marks)
+  marks = marks or H.get_marks()
   if marks == nil then
     return nil
   end
