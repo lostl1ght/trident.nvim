@@ -383,6 +383,11 @@ function H.emit_changed()
   H.info(vim.inspect(H.projects))
 end
 
+function H.remove_mark(index)
+  local marks = H.get_marks()
+  table.remove(marks, index)
+end
+
 function Trident.toggle_menu()
   if H.winid ~= -1 and api.nvim_win_is_valid(H.winid) then
     H.close_menu()
@@ -405,6 +410,17 @@ function Trident.add_file()
   H.validate_bufname(bufname)
 
   H.create_mark(bufname)
+  H.emit_changed()
+end
+
+function Trident.rm_file()
+  local bufname = H.get_bufname()
+  local idx = H.get_index_of(bufname)
+
+  if not H.valid_index(idx) then
+    return
+  end
+  H.remove_mark(idx)
   H.emit_changed()
 end
 
