@@ -43,6 +43,8 @@ local H = {
   winid = -1,
   config = {
     save_on_change = true,
+    mark_branch = true,
+    excluded_filetypes = {},
   },
 }
 
@@ -151,6 +153,24 @@ function H.trigger_event(event, data)
   api.nvim_exec_autocmds('User', { pattern = event, data = data })
 end
 
+function H.filter_file()
+  local ft = api.nvim_get_option_value('filetype', { scope = 'local' })
+  local bt = api.nvim_get_option_value('buftype', { scope = 'local' })
+  local exft = H.config.excluded_filetypes
+  if ft == 'trident' then
+    vim.notify('cannot add trident to trident', vim.log.levels.ERROR, { title = 'Trident' })
+    return false
+  end
+  if vim.tbl_contains(exft, ft) then
+    vim.notify('this filetype is excluded', vim.log.levels.ERROR, { title = 'Trident' })
+  end
+  if bt ~= '' then
+    vim.notify('can only add regular files to trident', vim.log.levels.ERROR, { title = 'Trident' })
+    return false
+  end
+  return true
+end
+
 function Trident.toggle_menu()
   if H.winid ~= -1 and api.nvim_win_is_valid(H.winid) then
     H.close_menu()
@@ -159,6 +179,12 @@ function Trident.toggle_menu()
   H.create_buffer()
   H.create_window()
   H.trigger_event('TridentWindowOpen', { bufnr = H.bufnr, winid = H.winid })
+end
+
+function Trident.add_file(name_or_id)
+  if not H.filter_file() then
+    return
+  end
 end
 
 return Trident
