@@ -384,7 +384,10 @@ function H.validate_bufname(bufname)
 end
 
 function H.create_mark(filename)
-  local cursor = api.nvim_win_get_cursor(0)
+  filename = vim.fs.normalize(filename)
+  local buf_exists = vim.fn.bufexists(filename) ~= 0
+  H.debug(vim.inspect(buf_exists))
+  local cursor = buf_exists and api.nvim_win_get_cursor(0) or { 1, 0 }
   local marks = H.get_marks()
   if marks == nil then
     local project = H.get_project()
