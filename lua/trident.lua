@@ -42,11 +42,12 @@ local H = {
   bufnr = -1,
   winid = -1,
   config = {
-    save_on_change = true,
     mark_branch = true,
     excluded_filetypes = {},
   },
   projects = {},
+  pattern = '^/.-/.-/()',
+  format = [[/%s/%s /%s]],
 }
 
 local api = vim.api
@@ -83,9 +84,40 @@ function H.select_menu_item()
   vim.notify('idx ' .. idx)
 end
 
-function H.on_mene_save()
+function H.on_menu_save()
   -- TODO: save
   vim.notify('save')
+end
+
+function H.pad_number(n, total)
+  local digits = 0
+
+  while total > 0 do
+    total = math.floor(total / 10)
+    digits = digits + 1
+  end
+  local format = [[%0]] .. digits .. [[d]]
+  return string.format(format, n)
+end
+
+function H.format_line(line, n, total)
+  line = vim.fn.fnamemodify(line, ':~')
+  local ok, devicons = pcall(require, 'nvim-web-devicons')
+  local icon
+  if ok then
+    icon = devicons.get_icon(line, vim.fn.fnamemodify(line, ':e'), { default = false })
+  end
+  return H.format:format(H.pad_number(n, total), (icon or ''), line)
+end
+
+function H.get_contents()
+  local marks = H.get_marks()
+  local contents = {}
+  for i, v in ipairs(marks or {}) do
+    local line = H.format_line(v.filename, i, #marks)
+    table.insert(contents, line)
+  end
+  return contents
 end
 
 function H.create_buffer()
@@ -94,10 +126,7 @@ function H.create_buffer()
   api.nvim_set_option_value('filetype', 'trident', { buf = H.bufnr })
   api.nvim_set_option_value('buftype', 'acwrite', { buf = H.bufnr })
 
-  local contents = {
-    'line 1',
-    'line 2',
-  }
+  local contents = H.get_contents()
   api.nvim_buf_set_lines(H.bufnr, 0, #contents, false, contents)
   api.nvim_buf_set_name(H.bufnr, 'trident-menu')
 
@@ -124,12 +153,29 @@ function H.create_buffer()
   )
   api.nvim_create_autocmd('BufWriteCmd', {
     buffer = H.bufnr,
-    callback = H.on_mene_save,
+    callback = function()
+      H.on_menu_save()
+      local lines = api.nvim_buf_get_lines(H.bufnr, 0, -1, false)
+      if #lines == 1 and lines[1] == '' then
+        return
+      end
+      local marks = H.get_marks()
+      local total = marks and #marks or 1
+      for i, line in ipairs(lines) do
+        if line:match(H.pattern) == nil then
+          local replacement = H.format_line(line, i, total)
+          api.nvim_buf_set_lines(H.bufnr, i - 1, i, false, { replacement })
+        end
+      end
+    end,
   })
+  -- TODO: better modified tracking
   api.nvim_create_autocmd('BufModifiedSet', {
     buffer = H.bufnr,
     callback = function()
-      api.nvim_set_option_value('modified', false, { buf = H.bufnr })
+      local modified = api.nvim_get_option_value('modified', { buf = H.bufnr })
+      local border_hl = modified and 'TridentBorderModified' or 'TridentBorder'
+      H.window_update_highlight(H.winid, 'FloatBorder', border_hl)
     end,
   })
   api.nvim_create_autocmd('BufLeave', {
@@ -138,12 +184,54 @@ function H.create_buffer()
     nested = true,
     callback = Trident.toggle_menu,
   })
-  if H.config.save_on_change then
-    api.nvim_create_autocmd({ 'TextChanged', 'TextChangedI' }, {
-      buffer = H.bufnr,
-      callback = H.on_mene_save,
-    })
+
+  api.nvim_create_autocmd({ 'CursorMoved', 'CursorMovedI' }, {
+    buffer = H.bufnr,
+    callback = H.view_track_cursor,
+  })
+  api.nvim_set_option_value('modified', false, { buf = H.bufnr })
+end
+
+function H.window_update_highlight(winid, new_from, new_to)
+  local new_entry = new_from .. ':' .. new_to
+  local replace_pattern = string.format('(%s:[^,]*)', vim.pesc(new_from))
+  local winhl = api.nvim_get_option_value('winhighlight', { win = winid })
+  local new_winhl, n_replace = winhl:gsub(replace_pattern, new_entry)
+  if n_replace == 0 then
+    new_winhl = new_winhl .. ',' .. new_entry
   end
+
+  api.nvim_set_option_value('winhighlight', new_winhl, { win = winid })
+end
+
+H.view_track_cursor = vim.schedule_wrap(function()
+  local bufnr = H.bufnr
+  local winid = H.winid
+  if not api.nvim_win_is_valid(winid) then
+    return
+  end
+
+  local cursor = api.nvim_win_get_cursor(winid)
+  local l = H.get_bufline(bufnr, cursor[1])
+
+  local cur_offset = H.match_line_offset(l)
+  if cursor[2] < (cur_offset - 1) then
+    cursor[2] = cur_offset - 1
+    api.nvim_win_set_cursor(winid, cursor)
+    -- Ensure icons are shown (may be not the case after horizontal scroll)
+    api.nvim_cmd({ cmd = 'normal', bang = true, args = { '1000zh' } }, {})
+  end
+end)
+
+function H.get_bufline(bufnr, line)
+  return api.nvim_buf_get_lines(bufnr, line - 1, line, false)[1]
+end
+
+function H.match_line_offset(l)
+  if l == nil then
+    return nil
+  end
+  return l:match(H.pattern) or 1
 end
 
 function H.create_window()
@@ -166,6 +254,14 @@ function H.create_window()
     style = 'minimal',
     noautocmd = true,
   })
+
+  api.nvim_set_option_value('wrap', false, { win = H.winid })
+  api.nvim_set_option_value('concealcursor', 'nvic', { win = H.winid })
+  api.nvim_set_option_value('conceallevel', 3, { win = H.winid })
+  api.nvim_win_call(H.winid, function()
+    vim.fn.matchadd('Conceal', [[^/\d\+/]])
+    vim.fn.matchadd('Conceal', [[^/\d\+/[^/]*\zs/\ze]])
+  end)
 end
 
 function H.trigger_event(event, data)
