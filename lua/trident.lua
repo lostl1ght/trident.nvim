@@ -100,8 +100,8 @@ function H.update_from_menu()
   local lines = api.nvim_buf_get_lines(H.bufnr, 0, -1, false)
   local key = H.get_mark_key()
   local marks = H.get_marks()
-  if #lines == 1 and lines[1] == '' or marks == nil then
-    return
+  if #lines == 1 and lines[1] == '' then
+    lines = {}
   end
 
   local new_marks = {}
@@ -196,7 +196,7 @@ function H.create_buffer()
       H.on_menu_save()
       local lines = api.nvim_buf_get_lines(H.bufnr, 0, -1, false)
       if #lines == 1 and lines[1] == '' then
-        return
+        lines = {}
       end
       local marks = H.get_marks()
       local total = marks and #marks or 1
