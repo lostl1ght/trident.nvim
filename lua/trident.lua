@@ -610,11 +610,12 @@ function Trident.toggle_file()
 end
 
 function Trident.setup(opts)
-  local ok, on_disk_project = pcall(H.read_data)
+  H.config = vim.tbl_deep_extend('force', H.config, opts)
+  local ok, on_disk_projects = pcall(H.read_data)
   if not ok then
-    on_disk_project = {}
+    on_disk_projects = {}
   end
-  H.projects = on_disk_project
+  H.projects = on_disk_projects
 end
 
 return Trident
