@@ -411,7 +411,6 @@ end
 function H.create_mark(filename)
   filename = vim.fs.normalize(filename)
   local buf_exists = vim.fn.bufexists(filename) ~= 0
-  H.debug(vim.inspect(buf_exists))
   local cursor = buf_exists and api.nvim_win_get_cursor(0) or { 1, 0 }
   local marks = H.get_marks()
   if marks == nil then
@@ -421,7 +420,7 @@ function H.create_mark(filename)
       marks = H.projects[H.get_mark_key()].marks
     end
   end
-  table.insert(marks, { filename = filename, row = cursor[1], col = cursor[2] })
+  table.insert(marks, { filename = vim.fs.normalize(filename), row = cursor[1], col = cursor[2] })
 end
 
 function H.emit_changed()
