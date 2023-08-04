@@ -570,6 +570,22 @@ function Trident.nav_prev()
   Trident.nav_file(cur_idx)
 end
 
+function Trident.status()
+  return H.get_index_of(H.get_bufname())
+end
+
+function Trident.toggle_file()
+  local bufname = H.get_bufname()
+  local idx = H.get_index_of(bufname)
+  if not H.valid_index(idx) then
+    Trident.add_file()
+    H.info(("'%s' added"):format(vim.fn.fnamemodify(bufname, ':~')))
+  else
+    Trident.rm_file()
+    H.info(("'%s' removed"):format(vim.fn.fnamemodify(bufname, ':~')))
+  end
+end
+
 function Trident.setup(opts)
   local ok, on_disk_project = pcall(H.read_data)
   if not ok then
