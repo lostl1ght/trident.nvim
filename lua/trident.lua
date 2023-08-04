@@ -35,6 +35,10 @@ local Trident = {}
 }
 --]]
 
+local default_height = 10
+local function default_width()
+  return math.floor(vim.api.nvim_get_option_value('columns', { scope = 'global' }) * 0.9)
+end
 local H = {
   bufnr = -1,
   winid = -1,
@@ -42,6 +46,20 @@ local H = {
     mark_branch = true,
     excluded_filetypes = {},
     data_path = vim.fs.normalize(vim.fn.stdpath('data') .. '/trident.json'),
+    window = {
+      height = default_height,
+      width = default_width,
+      row = function()
+        local lines = vim.api.nvim_get_option_value('lines', { scope = 'global' })
+        return math.floor((lines - default_height) / 2 - 1)
+      end,
+      col = function()
+        local columns = vim.api.nvim_get_option_value('columns', { scope = 'global' })
+        return math.floor((columns - default_width()) / 2)
+      end,
+      border = 'single',
+      relative = 'editor',
+    },
   },
   projects = {},
   pattern = '^/.-/.-/()',
@@ -272,25 +290,25 @@ function H.match_line_offset(l)
 end
 
 function H.create_window()
-  local lines = api.nvim_get_option_value('lines', { scope = 'global' })
-  local columns = api.nvim_get_option_value('columns', { scope = 'global' })
-
-  local width = math.floor(columns * 0.9)
-  local height = 10
-  local border = 'single'
-
-  H.winid = api.nvim_open_win(H.bufnr, true, {
-    relative = 'editor',
-    width = width,
-    height = height,
-    row = math.floor((lines - height) / 2 - 1),
-    col = math.floor((columns - width) / 2),
-    border = border,
+  local window_cfg = {
     title = 'Trident',
     title_pos = 'center',
     style = 'minimal',
     noautocmd = true,
-  })
+  }
+
+  local user_cfg = {}
+  for key, val in pairs(H.config.window) do
+    if type(val) == 'function' then
+      user_cfg[key] = val()
+    else
+      user_cfg[key] = val
+    end
+  end
+
+  window_cfg = vim.tbl_extend('force', window_cfg, user_cfg)
+
+  H.winid = api.nvim_open_win(H.bufnr, true, window_cfg)
 
   api.nvim_set_option_value('wrap', false, { win = H.winid })
   api.nvim_set_option_value('concealcursor', 'nvic', { win = H.winid })
