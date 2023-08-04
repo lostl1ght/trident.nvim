@@ -46,6 +46,7 @@ local H = {
     mark_branch = true,
     excluded_filetypes = {},
     data_path = vim.fs.normalize(vim.fn.stdpath('data') .. '/trident.json'),
+    notify = true,
     window = {
       height = default_height,
       width = default_width,
@@ -507,6 +508,9 @@ function Trident.add_file()
 
   H.create_mark(bufname)
   H.emit_changed()
+  if H.config.notify then
+    H.info(("'%s' added"):format(vim.fn.fnamemodify(bufname, ':~')))
+  end
 end
 
 function Trident.rm_file()
@@ -518,6 +522,9 @@ function Trident.rm_file()
   end
   H.remove_mark(idx)
   H.emit_changed()
+  if H.config.notify then
+    H.info(("'%s' removed"):format(vim.fn.fnamemodify(bufname, ':~')))
+  end
 end
 
 function Trident.nav_file(id)
@@ -597,10 +604,8 @@ function Trident.toggle_file()
   local idx = H.get_index_of(bufname)
   if not H.valid_index(idx) then
     Trident.add_file()
-    H.info(("'%s' added"):format(vim.fn.fnamemodify(bufname, ':~')))
   else
     Trident.rm_file()
-    H.info(("'%s' removed"):format(vim.fn.fnamemodify(bufname, ':~')))
   end
 end
 
