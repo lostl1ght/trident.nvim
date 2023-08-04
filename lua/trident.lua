@@ -610,7 +610,7 @@ function Trident.toggle_file()
 end
 
 function Trident.setup(opts)
-  H.config = vim.tbl_deep_extend('force', H.config, opts)
+  H.config = vim.tbl_deep_extend('force', H.config, opts or {})
   local ok, on_disk_projects = pcall(H.read_data)
   if not ok then
     on_disk_projects = {}
