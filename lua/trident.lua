@@ -130,7 +130,7 @@ function H.update_from_menu()
     if H.valid_index(idx) then
       table.insert(new_marks, marks[idx])
     else
-      H.create_mark(line)
+      table.insert(new_marks, H.create_mark(line))
     end
   end
   H.projects[key].marks = new_marks
@@ -439,7 +439,7 @@ function H.create_mark(filename)
       marks = H.projects[H.get_mark_key()].marks
     end
   end
-  table.insert(marks, { filename = vim.fs.normalize(filename), row = cursor[1], col = cursor[2] })
+  return { filename = vim.fs.normalize(filename), row = cursor[1], col = cursor[2] }
 end
 
 function H.emit_changed()
@@ -506,7 +506,8 @@ function Trident.add_file()
 
   H.validate_bufname(bufname)
 
-  H.create_mark(bufname)
+  local new_mark = H.create_mark(bufname)
+  table.insert(H.get_marks(), new_mark)
   H.emit_changed()
   if H.config.notify then
     H.info(("'%s' added"):format(vim.fn.fnamemodify(bufname, ':~')))
