@@ -100,24 +100,21 @@ function H.update_from_menu()
   local lines = api.nvim_buf_get_lines(H.bufnr, 0, -1, false)
   local key = H.get_mark_key()
   local marks = H.get_marks()
-  H.projects[key] = { marks = {} }
   if #lines == 1 and lines[1] == '' or marks == nil then
     return
   end
 
-  local new_marks = H.get_marks()
-  for i, line in ipairs(lines) do
+  local new_marks = {}
+  for _, line in ipairs(lines) do
     line = line:gsub(H.pattern, '')
     local idx = H.get_index_of(line, marks)
     if H.valid_index(idx) then
-      if i ~= idx then
-        local mark = table.remove(marks, idx)
-        table.insert(new_marks, i, mark)
-      end
+      table.insert(new_marks, marks[idx])
     else
       H.create_mark(line)
     end
   end
+  H.projects[key].marks = new_marks
 end
 
 function H.on_menu_save()
