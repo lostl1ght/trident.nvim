@@ -536,6 +536,40 @@ function Trident.nav_file(id)
   end
 end
 
+function H.get_current_index()
+  return H.get_index_of(H.get_bufname())
+end
+
+function Trident.nav_next()
+  local cur_idx = H.get_current_index()
+  local marks = H.get_marks()
+  local len = marks and #marks or 0
+  if cur_idx == nil then
+    cur_idx = 1
+  else
+    cur_idx = cur_idx + 1
+  end
+  if cur_idx > len then
+    cur_idx = 1
+  end
+  Trident.nav_file(cur_idx)
+end
+
+function Trident.nav_prev()
+  local cur_idx = H.get_current_index()
+  local marks = H.get_marks()
+  local len = marks and #marks or 0
+  if cur_idx == nil then
+    cur_idx = len
+  else
+    cur_idx = cur_idx - 1
+  end
+  if cur_idx < 1 then
+    cur_idx = len
+  end
+  Trident.nav_file(cur_idx)
+end
+
 function Trident.setup(opts)
   local ok, on_disk_project = pcall(H.read_data)
   if not ok then
