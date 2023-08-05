@@ -44,11 +44,12 @@ local H = {
   bufnr = -1,
   winid = -1,
   config = {
-    mark_branch = true,
-    excluded_filetypes = {},
     data_path = vim.fs.normalize(vim.fn.stdpath('data') .. '/trident.json'),
+    mark_branch = true,
     notify = true,
+    always_set_cursor = true,
     save_on_change = true,
+    excluded_filetypes = {},
     window = {
       height = default_height,
       width = default_width,
@@ -341,8 +342,8 @@ function H.mark_filter_file()
   return true
 end
 
-function H.mark_get_bufname()
-  return vim.fs.normalize(api.nvim_buf_get_name(0))
+function H.mark_get_bufname(bufnr)
+  return vim.fs.normalize(api.nvim_buf_get_name(bufnr or 0))
 end
 
 function H.mark_branch_key()
@@ -474,6 +475,13 @@ function H.mark_get_current_index()
   return H.mark_get_index_of(H.mark_get_bufname())
 end
 
+function H.mark_update_cursor(id)
+  local cursor = api.nvim_win_get_cursor(0)
+  local mark = H.mark_get_by_id(id)
+  mark.row = cursor[1]
+  mark.col = cursor[2]
+end
+
 function H.file_read_marks()
   local fd = assert(uv.fs_open(H.config.data_path, 'r', 438))
   local stat = assert(uv.fs_fstat(fd))
@@ -508,18 +516,23 @@ function Trident.add_file()
     return
   end
   local bufname = H.mark_get_bufname()
-  if H.mark_valid_index(H.mark_get_index_of(bufname)) then
-    return
+  local idx = H.mark_get_index_of(bufname)
+  if H.mark_valid_index(idx) then
+    H.mark_update_cursor(idx)
+    if H.config.notify then
+      H.info(("'%s' updated"):format(vim.fn.fnamemodify(bufname, ':~')))
+    end
+  else
+    H.mark_validate_bufname(bufname)
+
+    local new_mark = H.mark_create(bufname)
+    table.insert(H.mark_get_all(), new_mark)
+    if H.config.notify then
+      H.info(("'%s' added"):format(vim.fn.fnamemodify(bufname, ':~')))
+    end
   end
 
-  H.mark_validate_bufname(bufname)
-
-  local new_mark = H.mark_create(bufname)
-  table.insert(H.mark_get_all(), new_mark)
   H.mark_emit_changed()
-  if H.config.notify then
-    H.info(("'%s' added"):format(vim.fn.fnamemodify(bufname, ':~')))
-  end
 end
 
 function Trident.rm_file()
@@ -546,14 +559,14 @@ function Trident.nav_file(id)
   local filename = vim.fs.normalize(mark.filename)
   local bufnr = H.mark_get_or_create_file(filename)
   ---@diagnostic disable-next-line
-  local set_row = not api.nvim_buf_is_loaded(bufnr)
+  local set_cursor = H.config.always_set_cursor or not api.nvim_buf_is_loaded(bufnr)
   local old_bufnr = api.nvim_get_current_buf()
 
   ---@diagnostic disable-next-line
   api.nvim_set_current_buf(bufnr)
   api.nvim_set_option_value('buflisted', true, { buf = bufnr })
 
-  if set_row and mark.row and mark.col then
+  if set_cursor and mark.row and mark.col then
     ---@diagnostic disable-next-line
     api.nvim_win_set_cursor(vim.fn.bufwinid(bufnr), { mark.row, mark.col })
   end
@@ -624,11 +637,27 @@ function Trident._must_set()
     on_disk_projects = {}
   end
   H.projects = on_disk_projects
+  local function update_cursor(bufnr)
+    local bufname = H.mark_get_bufname(bufnr)
+    local idx = H.mark_get_index_of(bufname)
+    if H.mark_valid_index(idx) then
+      H.mark_update_cursor(idx)
+    end
+  end
   api.nvim_create_autocmd('VimLeavePre', {
     group = TridentAug,
     callback = function()
+      update_cursor()
       H.mark_save_to_disk()
-    end
+    end,
+  })
+  api.nvim_create_autocmd('BufLeave', {
+    group = TridentAug,
+    callback = function(data)
+      if H.config.always_set_cursor then
+        update_cursor(data.buf)
+      end
+    end,
   })
 end
 
