@@ -89,96 +89,31 @@ function H.debug(msg)
   H.notify(msg, vim.log.levels.DEBUG)
 end
 
-function H.close_menu()
+function H.menu_close()
   -- save marks
   api.nvim_win_close(H.winid, true)
   H.bufnr = -1
   H.winid = -1
 end
 
-function H.select_menu_item()
+function H.menu_select()
   local idx = vim.fn.line('.')
-  H.close_menu()
+  H.menu_close()
   Trident.nav_file(idx)
 end
 
-function H.get_or_create_buffer(filename)
-  local buf_exists = vim.fn.bufexists(filename) ~= 0
-  if buf_exists then
-    return vim.fn.bufnr(filename)
-  end
-  return vim.fn.bufadd(filename)
+function H.menu_on_write()
+  H.mark_update_from_menu()
+  H.mark_save_to_disk()
 end
 
-function H.get_mark(idx)
-  local marks = H.get_marks()
-  return marks[idx]
-end
-
-function H.update_from_menu()
-  local lines = api.nvim_buf_get_lines(H.bufnr, 0, -1, false)
-  local key = H.get_mark_key()
-  local marks = H.get_marks()
-  if #lines == 1 and lines[1] == '' then
-    lines = {}
-  end
-
-  local new_marks = {}
-  for _, line in ipairs(lines) do
-    line = line:gsub(H.pattern, '')
-    local idx = H.get_index_of(line, marks)
-    if H.valid_index(idx) then
-      table.insert(new_marks, marks[idx])
-    else
-      table.insert(new_marks, H.create_mark(line))
-    end
-  end
-  H.projects[key].marks = new_marks
-end
-
-function H.on_menu_save()
-  H.update_from_menu()
-  H.save()
-end
-
-function H.pad_number(n, total)
-  local digits = 0
-
-  while total > 0 do
-    total = math.floor(total / 10)
-    digits = digits + 1
-  end
-  local format = [[%0]] .. digits .. [[d]]
-  return string.format(format, n)
-end
-
-function H.format_line(line, n, total)
-  line = vim.fn.fnamemodify(line, ':~')
-  local ok, devicons = pcall(require, 'nvim-web-devicons')
-  local icon
-  if ok then
-    icon = devicons.get_icon(line, vim.fn.fnamemodify(line, ':e'), { default = false })
-  end
-  return H.format:format(H.pad_number(n, total), (icon or ''), line)
-end
-
-function H.get_contents()
-  local marks = H.get_marks()
-  local contents = {}
-  for i, v in ipairs(marks or {}) do
-    local line = H.format_line(v.filename, i, #marks)
-    table.insert(contents, line)
-  end
-  return contents
-end
-
-function H.create_buffer()
+function H.menu_buffer_create()
   H.bufnr = api.nvim_create_buf(false, false)
   api.nvim_set_option_value('bufhidden', 'wipe', { buf = H.bufnr })
   api.nvim_set_option_value('filetype', 'trident', { buf = H.bufnr })
   api.nvim_set_option_value('buftype', 'acwrite', { buf = H.bufnr })
 
-  local contents = H.get_contents()
+  local contents = H.line_get_contents()
   api.nvim_buf_set_lines(H.bufnr, 0, #contents, false, contents)
   api.nvim_buf_set_name(H.bufnr, 'trident-menu')
 
@@ -201,27 +136,27 @@ function H.create_buffer()
     'n',
     '<cr>',
     '',
-    { noremap = true, desc = 'Nav to file', callback = H.select_menu_item }
+    { noremap = true, desc = 'Nav to file', callback = H.menu_select }
   )
 
   local function modified_callback()
     local modified = api.nvim_get_option_value('modified', { buf = H.bufnr })
     local border_hl = modified and 'TridentBorderModified' or 'TridentBorder'
-    H.window_update_highlight(H.winid, 'FloatBorder', border_hl)
+    H.menu_update_highlight(H.winid, 'FloatBorder', border_hl)
   end
   api.nvim_create_autocmd('BufWriteCmd', {
     buffer = H.bufnr,
     callback = function()
-      H.on_menu_save()
+      H.menu_on_write()
       local lines = api.nvim_buf_get_lines(H.bufnr, 0, -1, false)
       if #lines == 1 and lines[1] == '' then
         lines = {}
       end
-      local marks = H.get_marks()
+      local marks = H.mark_get_all()
       local total = marks and #marks or 1
       for i, line in ipairs(lines) do
         if line:match(H.pattern) == nil then
-          local replacement = H.format_line(line, i, total)
+          local replacement = H.line_format(line, i, total)
           api.nvim_buf_set_lines(H.bufnr, i - 1, i, false, { replacement })
         end
       end
@@ -243,12 +178,12 @@ function H.create_buffer()
 
   api.nvim_create_autocmd({ 'CursorMoved', 'CursorMovedI' }, {
     buffer = H.bufnr,
-    callback = H.view_track_cursor,
+    callback = H.menu_track_cursor,
   })
   api.nvim_set_option_value('modified', false, { buf = H.bufnr })
 end
 
-function H.window_update_highlight(winid, new_from, new_to)
+function H.menu_update_highlight(winid, new_from, new_to)
   local new_entry = new_from .. ':' .. new_to
   local replace_pattern = string.format('(%s:[^,]*)', vim.pesc(new_from))
   local winhl = api.nvim_get_option_value('winhighlight', { win = winid })
@@ -260,7 +195,7 @@ function H.window_update_highlight(winid, new_from, new_to)
   api.nvim_set_option_value('winhighlight', new_winhl, { win = winid })
 end
 
-H.view_track_cursor = vim.schedule_wrap(function()
+H.menu_track_cursor = vim.schedule_wrap(function()
   local bufnr = H.bufnr
   local winid = H.winid
   if not api.nvim_win_is_valid(winid) then
@@ -268,9 +203,9 @@ H.view_track_cursor = vim.schedule_wrap(function()
   end
 
   local cursor = api.nvim_win_get_cursor(winid)
-  local l = H.get_bufline(bufnr, cursor[1])
+  local l = H.menu_get_bufline(bufnr, cursor[1])
 
-  local cur_offset = H.match_line_offset(l)
+  local cur_offset = H.menu_match_line_offset(l)
   if cursor[2] < (cur_offset - 1) then
     cursor[2] = cur_offset - 1
     api.nvim_win_set_cursor(winid, cursor)
@@ -279,18 +214,18 @@ H.view_track_cursor = vim.schedule_wrap(function()
   end
 end)
 
-function H.get_bufline(bufnr, line)
+function H.menu_get_bufline(bufnr, line)
   return api.nvim_buf_get_lines(bufnr, line - 1, line, false)[1]
 end
 
-function H.match_line_offset(l)
+function H.menu_match_line_offset(l)
   if l == nil then
     return nil
   end
   return l:match(H.pattern) or 1
 end
 
-function H.create_window()
+function H.menu_create_window()
   local window_cfg = {
     title = 'Trident',
     title_pos = 'center',
@@ -320,11 +255,72 @@ function H.create_window()
   end)
 end
 
-function H.trigger_event(event, data)
-  api.nvim_exec_autocmds('User', { pattern = event, data = data })
+function H.line_pad_number(n, total)
+  local digits = 0
+
+  while total > 0 do
+    total = math.floor(total / 10)
+    digits = digits + 1
+  end
+  local format = [[%0]] .. digits .. [[d]]
+  return string.format(format, n)
 end
 
-function H.filter_file()
+function H.line_format(line, n, total)
+  line = vim.fn.fnamemodify(line, ':~')
+  local ok, devicons = pcall(require, 'nvim-web-devicons')
+  local icon
+  if ok then
+    icon = devicons.get_icon(line, vim.fn.fnamemodify(line, ':e'), { default = false })
+  end
+  return H.format:format(H.line_pad_number(n, total), (icon or ''), line)
+end
+
+function H.line_get_contents()
+  local marks = H.mark_get_all()
+  local contents = {}
+  for i, v in ipairs(marks or {}) do
+    local line = H.line_format(v.filename, i, #marks)
+    table.insert(contents, line)
+  end
+  return contents
+end
+
+function H.mark_get_or_create_file(filename)
+  local buf_exists = vim.fn.bufexists(filename) ~= 0
+  if buf_exists then
+    return vim.fn.bufnr(filename)
+  end
+  return vim.fn.bufadd(filename)
+end
+
+function H.mark_get_by_id(idx)
+  local marks = H.mark_get_all()
+  return marks[idx]
+end
+
+function H.mark_update_from_menu()
+  local lines = api.nvim_buf_get_lines(H.bufnr, 0, -1, false)
+  local key = H.mark_get_key()
+  local marks = H.mark_get_all()
+  if #lines == 1 and lines[1] == '' then
+    lines = {}
+  end
+
+  local new_marks = {}
+  for _, line in ipairs(lines) do
+    line = line:gsub(H.pattern, '')
+    local idx = H.mark_get_index_of(line, marks)
+    if H.mark_valid_index(idx) then
+      table.insert(new_marks, marks[idx])
+    else
+      table.insert(new_marks, H.mark_create(line))
+    end
+  end
+  H.projects[key].marks = new_marks
+end
+
+function H.mark_filter_file()
   local ft = api.nvim_get_option_value('filetype', { scope = 'local' })
   local bt = api.nvim_get_option_value('buftype', { scope = 'local' })
   local exft = H.config.excluded_filetypes
@@ -343,11 +339,11 @@ function H.filter_file()
   return true
 end
 
-function H.get_bufname()
+function H.mark_get_bufname()
   return vim.fs.normalize(api.nvim_buf_get_name(0))
 end
 
-function H.branch_key()
+function H.mark_branch_key()
   local branch
   local obj = vim.system({ 'git', 'rev-parse', '--abbrev-ref', 'HEAD' }, { text = true }):wait()
   branch = obj.stdout
@@ -358,34 +354,34 @@ function H.branch_key()
   if branch then
     return uv.cwd() .. ':' .. branch:gsub('\n', '')
   else
-    return H.project_key()
+    return H.mark_project_key()
   end
 end
 
-function H.project_key()
+function H.mark_project_key()
   return uv.cwd()
 end
 
-function H.get_mark_key()
+function H.mark_get_key()
   if H.config.mark_branch then
-    return H.branch_key()
+    return H.mark_branch_key()
   else
-    return H.project_key()
+    return H.mark_project_key()
   end
 end
 
-function H.get_project()
-  local key = H.get_mark_key()
+function H.mark_get_project()
+  local key = H.mark_get_key()
   return H.projects[key]
 end
 
-function H.get_marks()
-  local project = H.get_project()
+function H.mark_get_all()
+  local project = H.mark_get_project()
   return project and project.marks
 end
 
-function H.get_index_of(item, marks)
-  marks = marks or H.get_marks()
+function H.mark_get_index_of(item, marks)
+  marks = marks or H.mark_get_all()
   if marks == nil then
     return nil
   end
@@ -405,21 +401,21 @@ function H.get_index_of(item, marks)
   return nil
 end
 
-function H.get_marked_filename(idx)
-  local marks = H.get_marks()
+function H.mark_get_filename(idx)
+  local marks = H.mark_get_all()
   return marks and marks[idx] and marks[idx].filename
 end
 
-function H.valid_index(idx)
+function H.mark_valid_index(idx)
   if idx == nil then
     return false
   end
 
-  local filename = H.get_marked_filename(idx)
+  local filename = H.mark_get_filename(idx)
   return filename ~= nil and filename ~= ''
 end
 
-function H.validate_bufname(bufname)
+function H.mark_validate_bufname(bufname)
   local valid = bufname ~= nil or bufname ~= ''
   if not valid then
     H.error('cannot find a valid file name to mark')
@@ -427,31 +423,54 @@ function H.validate_bufname(bufname)
   return valid
 end
 
-function H.create_mark(filename)
+function H.mark_create(filename)
   filename = vim.fs.normalize(filename)
   local buf_exists = vim.fn.bufexists(filename) ~= 0
   local cursor = buf_exists and api.nvim_win_get_cursor(0) or { 1, 0 }
-  local marks = H.get_marks()
+  local marks = H.mark_get_all()
   if marks == nil then
-    local project = H.get_project()
+    local project = H.mark_get_project()
     if project == nil then
-      H.projects[H.get_mark_key()] = { marks = {} }
-      marks = H.projects[H.get_mark_key()].marks
+      H.projects[H.mark_get_key()] = { marks = {} }
+      marks = H.projects[H.mark_get_key()].marks
     end
   end
   return { filename = vim.fs.normalize(filename), row = cursor[1], col = cursor[2] }
 end
 
-function H.emit_changed()
-  H.save()
+function H.mark_emit_changed()
+  H.mark_save_to_disk()
 end
 
-function H.remove_mark(index)
-  local marks = H.get_marks()
+function H.mark_remove(index)
+  local marks = H.mark_get_all()
   table.remove(marks, index)
 end
 
-function H.read_data()
+function H.mark_refresh()
+  local key = H.mark_get_key()
+  local current_project = {
+    [key] = vim.deepcopy(H.projects[key]),
+  }
+  H.projects = nil
+
+  local ok, on_disk_project = pcall(H.file_read_marks)
+  if not ok then
+    on_disk_project = {}
+  end
+  H.projects = vim.tbl_deep_extend('force', on_disk_project, current_project)
+end
+
+function H.mark_save_to_disk()
+  H.mark_refresh()
+  H.file_write_data()
+end
+
+function H.mark_get_current_index()
+  return H.mark_get_index_of(H.mark_get_bufname())
+end
+
+function H.file_read_marks()
   local fd = assert(uv.fs_open(H.config.data_path, 'r', 438))
   local stat = assert(uv.fs_fstat(fd))
   local data = assert(uv.fs_read(fd, stat.size, 0))
@@ -460,83 +479,68 @@ function H.read_data()
   return vim.json.decode(data)
 end
 
-function H.refresh()
-  local key = H.get_mark_key()
-  local current_project = {
-    [key] = vim.deepcopy(H.projects[key]),
-  }
-  H.projects = nil
-
-  local ok, on_disk_project = pcall(H.read_data)
-  if not ok then
-    on_disk_project = {}
-  end
-  H.projects = vim.tbl_deep_extend('force', on_disk_project, current_project)
-end
-
-function H.write_data()
+function H.file_write_data()
   local fd = assert(uv.fs_open(H.config.data_path, 'w', 438))
   assert(uv.fs_write(fd, vim.fn.json_encode(H.projects)))
   assert(uv.fs_close(fd))
 end
 
-function H.save()
-  H.refresh()
-  H.write_data()
+function H.trigger_event(event, data)
+  api.nvim_exec_autocmds('User', { pattern = event, data = data })
 end
 
 function Trident.toggle_menu()
   if H.winid ~= -1 and api.nvim_win_is_valid(H.winid) then
-    H.close_menu()
+    H.menu_close()
     return
   end
-  H.create_buffer()
-  H.create_window()
+  H.menu_buffer_create()
+  H.menu_create_window()
   H.trigger_event('TridentWindowOpen', { bufnr = H.bufnr, winid = H.winid })
 end
 
 function Trident.add_file()
-  if not H.filter_file() then
+  if not H.mark_filter_file() then
     return
   end
-  local bufname = H.get_bufname()
-  if H.valid_index(H.get_index_of(bufname)) then
+  local bufname = H.mark_get_bufname()
+  if H.mark_valid_index(H.mark_get_index_of(bufname)) then
     return
   end
 
-  H.validate_bufname(bufname)
+  H.mark_validate_bufname(bufname)
 
-  local new_mark = H.create_mark(bufname)
-  table.insert(H.get_marks(), new_mark)
-  H.emit_changed()
+  local new_mark = H.mark_create(bufname)
+  table.insert(H.mark_get_all(), new_mark)
+  H.mark_emit_changed()
   if H.config.notify then
     H.info(("'%s' added"):format(vim.fn.fnamemodify(bufname, ':~')))
   end
 end
 
 function Trident.rm_file()
-  local bufname = H.get_bufname()
-  local idx = H.get_index_of(bufname)
+  local bufname = H.mark_get_bufname()
+  local idx = H.mark_get_index_of(bufname)
 
-  if not H.valid_index(idx) then
+  if not H.mark_valid_index(idx) then
     return
   end
-  H.remove_mark(idx)
-  H.emit_changed()
+  H.mark_remove(idx)
+  H.mark_emit_changed()
   if H.config.notify then
     H.info(("'%s' removed"):format(vim.fn.fnamemodify(bufname, ':~')))
   end
 end
 
 function Trident.nav_file(id)
-  local idx = H.get_index_of(id)
-  if not H.valid_index(idx) then
+  local idx = H.mark_get_index_of(id)
+  if not H.mark_valid_index(idx) then
     return
   end
 
-  local mark = H.get_mark(idx)
+  local mark = H.mark_get_by_id(idx)
   local filename = vim.fs.normalize(mark.filename)
-  local bufnr = H.get_or_create_buffer(filename)
+  local bufnr = H.mark_get_or_create_file(filename)
   ---@diagnostic disable-next-line
   local set_row = not api.nvim_buf_is_loaded(bufnr)
   local old_bufnr = api.nvim_get_current_buf()
@@ -562,13 +566,9 @@ function Trident.nav_file(id)
   end
 end
 
-function H.get_current_index()
-  return H.get_index_of(H.get_bufname())
-end
-
 function Trident.nav_next()
-  local cur_idx = H.get_current_index()
-  local marks = H.get_marks()
+  local cur_idx = H.mark_get_current_index()
+  local marks = H.mark_get_all()
   local len = marks and #marks or 0
   if cur_idx == nil then
     cur_idx = 1
@@ -582,8 +582,8 @@ function Trident.nav_next()
 end
 
 function Trident.nav_prev()
-  local cur_idx = H.get_current_index()
-  local marks = H.get_marks()
+  local cur_idx = H.mark_get_current_index()
+  local marks = H.mark_get_all()
   local len = marks and #marks or 0
   if cur_idx == nil then
     cur_idx = len
@@ -597,13 +597,13 @@ function Trident.nav_prev()
 end
 
 function Trident.status()
-  return H.get_index_of(H.get_bufname())
+  return H.mark_get_index_of(H.mark_get_bufname())
 end
 
 function Trident.toggle_file()
-  local bufname = H.get_bufname()
-  local idx = H.get_index_of(bufname)
-  if not H.valid_index(idx) then
+  local bufname = H.mark_get_bufname()
+  local idx = H.mark_get_index_of(bufname)
+  if not H.mark_valid_index(idx) then
     Trident.add_file()
   else
     Trident.rm_file()
@@ -615,7 +615,7 @@ function Trident.setup(opts)
 end
 
 function Trident._load_from_disk()
-  local ok, on_disk_projects = pcall(H.read_data)
+  local ok, on_disk_projects = pcall(H.file_read_marks)
   if not ok then
     on_disk_projects = {}
   end
