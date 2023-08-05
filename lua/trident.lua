@@ -612,6 +612,9 @@ end
 
 function Trident.setup(opts)
   H.config = vim.tbl_deep_extend('force', H.config, opts or {})
+end
+
+function Trident._load_from_disk()
   local ok, on_disk_projects = pcall(H.read_data)
   if not ok then
     on_disk_projects = {}
