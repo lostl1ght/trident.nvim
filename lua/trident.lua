@@ -93,7 +93,11 @@ function H.debug(msg)
 end
 
 function H.menu_close()
-  -- save marks
+  -- TODO: figure out confirm()
+  H.window_close()
+end
+
+function H.window_close()
   api.nvim_win_close(H.winid, true)
   H.bufnr = -1
   H.winid = -1
