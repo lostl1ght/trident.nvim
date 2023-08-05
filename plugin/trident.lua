@@ -1,1 +1,1 @@
-require('trident')._load_from_disk()
+require('trident')._must_set()

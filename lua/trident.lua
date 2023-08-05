@@ -35,6 +35,7 @@ local Trident = {}
 }
 --]]
 
+local TridentAug = vim.api.nvim_create_augroup('TridentAug', {})
 local default_height = 10
 local function default_width()
   return math.floor(vim.api.nvim_get_option_value('columns', { scope = 'global' }) * 0.9)
@@ -614,12 +615,18 @@ function Trident.setup(opts)
   H.config = vim.tbl_deep_extend('force', H.config, opts or {})
 end
 
-function Trident._load_from_disk()
+function Trident._must_set()
   local ok, on_disk_projects = pcall(H.file_read_marks)
   if not ok then
     on_disk_projects = {}
   end
   H.projects = on_disk_projects
+  api.nvim_create_autocmd('VimLeavePre', {
+    group = TridentAug,
+    callback = function()
+      H.mark_save_to_disk()
+    end
+  })
 end
 
 return Trident
