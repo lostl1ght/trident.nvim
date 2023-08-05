@@ -48,6 +48,7 @@ local H = {
     excluded_filetypes = {},
     data_path = vim.fs.normalize(vim.fn.stdpath('data') .. '/trident.json'),
     notify = true,
+    save_on_change = true,
     window = {
       height = default_height,
       width = default_width,
@@ -440,7 +441,9 @@ function H.mark_create(filename)
 end
 
 function H.mark_emit_changed()
-  H.mark_save_to_disk()
+  if H.config.save_on_change then
+    H.mark_save_to_disk()
+  end
 end
 
 function H.mark_remove(index)
