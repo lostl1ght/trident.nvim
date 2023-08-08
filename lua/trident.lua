@@ -121,6 +121,7 @@ function H.menu_buffer_create()
   api.nvim_set_option_value('buftype', 'acwrite', { buf = H.bufnr })
 
   local contents = H.line_get_contents()
+  -- TODO: figure out icon highlights
   api.nvim_buf_set_lines(H.bufnr, 0, #contents, false, contents)
   api.nvim_buf_set_name(H.bufnr, 'trident-menu')
 
@@ -635,10 +636,16 @@ function Trident.toggle_file()
   end
 end
 
-function Trident.toggle_branch()
-  H.config.mark_branch = not H.config.mark_branch
+function Trident.toggle_branch(enable)
+  local new_state
+  if enable ~= nil then
+    new_state = enable
+  else
+    new_state = not H.config.mark_branch
+  end
+  H.config.mark_branch = new_state
   if H.config.notify then
-    H.info(('mark branch %s'):format(H.config.mark_branch and 'enabled' or 'disabled'))
+    H.info(('mark branch %s'):format(new_state and 'enabled' or 'disabled'))
   end
 end
 
@@ -674,6 +681,13 @@ function Trident._must_set()
       end
     end,
   })
+  require('editorconfig').properties.trident_mark_branch = function(_, val, _)
+    local stringboolean = {
+      ['true'] = true,
+      ['false'] = false,
+    }
+    Trident.toggle_branch(stringboolean[val])
+  end
 end
 
 return Trident
