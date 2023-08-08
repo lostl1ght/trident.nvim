@@ -635,6 +635,13 @@ function Trident.toggle_file()
   end
 end
 
+function Trident.toggle_branch()
+  H.config.mark_branch = not H.config.mark_branch
+  if H.config.notify then
+    H.info(('mark branch %s'):format(H.config.mark_branch and 'enabled' or 'disabled'))
+  end
+end
+
 function Trident.setup(opts)
   H.config = vim.tbl_deep_extend('force', H.config, opts or {})
 end
