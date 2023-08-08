@@ -484,6 +484,9 @@ function H.mark_update_cursor(id)
   local mark = H.mark_get_by_id(id)
   mark.row = cursor[1]
   mark.col = cursor[2]
+  if H.config.save_on_change then
+    H.mark_save_to_disk()
+  end
 end
 
 function H.file_read_marks()
@@ -564,6 +567,7 @@ function Trident.nav_file(id)
   local bufnr = H.mark_get_or_create_file(filename)
   ---@diagnostic disable-next-line
   local set_cursor = H.config.always_set_cursor or not api.nvim_buf_is_loaded(bufnr)
+  H.debug(tostring(set_cursor))
   local old_bufnr = api.nvim_get_current_buf()
 
   ---@diagnostic disable-next-line
