@@ -490,9 +490,7 @@ function H.mark_update_cursor(id)
   local mark = H.mark_get_by_id(id)
   mark.row = cursor[1]
   mark.col = cursor[2]
-  if H.config.save_on_change then
-    H.mark_save_to_disk()
-  end
+  H.mark_emit_changed()
 end
 
 function H.file_read_marks()
