@@ -685,12 +685,16 @@ function Trident._must_set()
       end
     end,
   })
+  local did_set = false
   require('editorconfig').properties.trident_mark_branch = function(_, val, _)
-    local stringboolean = {
-      ['true'] = true,
-      ['false'] = false,
-    }
-    Trident.toggle_branch(stringboolean[val])
+    if not did_set then
+      local stringboolean = {
+        ['true'] = true,
+        ['false'] = false,
+      }
+      Trident.toggle_branch(stringboolean[val])
+      did_set = true
+    end
   end
 end
 
