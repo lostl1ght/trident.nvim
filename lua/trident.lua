@@ -46,7 +46,12 @@ local H = {
   config = {
     data_path = vim.fs.normalize(vim.fn.stdpath('data') .. '/trident.json'),
     mark_branch = true,
-    notify = true,
+    notify = {
+      mark_branch = true,
+      remove = true,
+      add = true,
+      update = true,
+    },
     always_set_cursor = true,
     save_on_change = true,
     excluded_filetypes = {},
@@ -527,7 +532,7 @@ function Trident.add_file()
   local idx = H.mark_get_index_of(bufname)
   if H.mark_valid_index(idx) then
     H.mark_update_cursor(idx)
-    if H.config.notify then
+    if H.config.notify.update then
       H.info(("'%s' updated"):format(vim.fn.fnamemodify(bufname, ':~')))
     end
   else
@@ -535,7 +540,7 @@ function Trident.add_file()
 
     local new_mark = H.mark_create(bufname)
     table.insert(H.mark_get_all(), new_mark)
-    if H.config.notify then
+    if H.config.notify.add then
       H.info(("'%s' added"):format(vim.fn.fnamemodify(bufname, ':~')))
     end
   end
@@ -552,7 +557,7 @@ function Trident.rm_file()
   end
   H.mark_remove(idx)
   H.mark_emit_changed()
-  if H.config.notify then
+  if H.config.notify.remove then
     H.info(("'%s' removed"):format(vim.fn.fnamemodify(bufname, ':~')))
   end
 end
@@ -568,7 +573,6 @@ function Trident.nav_file(id)
   local bufnr = H.mark_get_or_create_file(filename)
   ---@diagnostic disable-next-line
   local set_cursor = H.config.always_set_cursor or not api.nvim_buf_is_loaded(bufnr)
-  H.debug(tostring(set_cursor))
   local old_bufnr = api.nvim_get_current_buf()
 
   ---@diagnostic disable-next-line
@@ -644,7 +648,7 @@ function Trident.toggle_branch(enable)
     new_state = not H.config.mark_branch
   end
   H.config.mark_branch = new_state
-  if H.config.notify then
+  if H.config.notify.mark_branch then
     H.info(('mark branch %s'):format(new_state and 'enabled' or 'disabled'))
   end
 end
