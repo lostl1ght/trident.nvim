@@ -79,24 +79,6 @@ local api = vim.api
 -- NOTE: update on stable
 local uv = vim.uv or vim.loop
 
----@param msg any
----@param level integer
-function H.notify(msg, level)
-  vim.notify(msg, level, { title = 'Trident' })
-end
-
-function H.error(msg)
-  H.notify(msg, vim.log.levels.ERROR)
-end
-
-function H.info(msg)
-  H.notify(msg, vim.log.levels.INFO)
-end
-
-function H.debug(msg)
-  H.notify(msg, vim.log.levels.DEBUG)
-end
-
 function H.menu_close()
   -- TODO: figure out confirm()
   H.window_close()
@@ -338,15 +320,15 @@ function H.mark_filter_file()
   local bt = api.nvim_get_option_value('buftype', { scope = 'local' })
   local exft = H.config.excluded_filetypes
   if ft == 'trident' then
-    H.error('cannot add trident to trident')
+    require('trident.util').error('cannot add trident to trident')
     return false
   end
   if bt ~= '' then
-    H.error('can only add regular files to trident')
+    require('trident.util').error('can only add regular files to trident')
     return false
   end
   if vim.tbl_contains(exft, ft) then
-    H.error('this filetype is excluded')
+    require('trident.util').error('this filetype is excluded')
     return false
   end
   return true
@@ -431,7 +413,7 @@ end
 function H.mark_validate_bufname(bufname)
   local valid = bufname ~= nil or bufname ~= ''
   if not valid then
-    H.error('cannot find a valid file name to mark')
+    require('trident.util').error('cannot find a valid file name to mark')
   end
   return valid
 end
@@ -531,7 +513,7 @@ function Trident.add_file()
   if H.mark_valid_index(idx) then
     H.mark_update_cursor(idx)
     if H.config.notify.update then
-      H.info(("'%s' updated"):format(vim.fn.fnamemodify(bufname, ':~')))
+      require('trident.util').info(("'%s' updated"):format(vim.fn.fnamemodify(bufname, ':~')))
     end
   else
     H.mark_validate_bufname(bufname)
@@ -539,7 +521,7 @@ function Trident.add_file()
     local new_mark = H.mark_create(bufname)
     table.insert(H.mark_get_all(), new_mark)
     if H.config.notify.add then
-      H.info(("'%s' added"):format(vim.fn.fnamemodify(bufname, ':~')))
+      require('trident.util').info(("'%s' added"):format(vim.fn.fnamemodify(bufname, ':~')))
     end
   end
 
@@ -556,7 +538,7 @@ function Trident.rm_file()
   H.mark_remove(idx)
   H.mark_emit_changed()
   if H.config.notify.remove then
-    H.info(("'%s' removed"):format(vim.fn.fnamemodify(bufname, ':~')))
+    require('trident.util').info(("'%s' removed"):format(vim.fn.fnamemodify(bufname, ':~')))
   end
 end
 
@@ -647,7 +629,7 @@ function Trident.toggle_branch(enable)
   end
   H.config.mark_branch = new_state
   if H.config.notify.mark_branch then
-    H.info(('mark branch %s'):format(new_state and 'enabled' or 'disabled'))
+    require('trident.util').info(('mark branch %s'):format(new_state and 'enabled' or 'disabled'))
   end
 end
 
