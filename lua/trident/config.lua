@@ -1,8 +1,3 @@
-local default_height = 10
-local function default_width()
-  return math.floor(vim.api.nvim_get_option_value('columns', { scope = 'global' }) * 0.9)
-end
-
 local M = {
   config = {
     data_path = vim.fs.normalize(vim.fn.stdpath('data') .. '/trident.json'),
@@ -17,8 +12,10 @@ local M = {
     save_on_change = true,
     excluded_filetypes = {},
     window = {
-      height = default_height,
-      width = default_width,
+      height = 10,
+      width = function()
+        return math.floor(vim.api.nvim_get_option_value('columns', { scope = 'global' }) * 0.9)
+      end,
       row = function()
         local lines = vim.api.nvim_get_option_value('lines', { scope = 'global' })
         local height = require('trident.config').window.height

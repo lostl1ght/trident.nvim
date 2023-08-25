@@ -100,6 +100,7 @@ function M.menu_buffer_create()
     callback = M.menu_close,
   })
 
+  -- The entire thing is taken from mini.files
   api.nvim_create_autocmd({ 'CursorMoved', 'CursorMovedI' }, {
     buffer = M.bufnr,
     callback = M.menu_track_cursor,
@@ -107,6 +108,7 @@ function M.menu_buffer_create()
   api.nvim_set_option_value('modified', false, { buf = M.bufnr })
 end
 
+-- Again, the entire thing is taken from mini.files
 function M.menu_update_highlight(winid, new_from, new_to)
   local new_entry = new_from .. ':' .. new_to
   local replace_pattern = string.format('(%s:[^,]*)', vim.pesc(new_from))
@@ -171,6 +173,7 @@ function M.menu_create_window()
 
   M.winid = api.nvim_open_win(M.bufnr, true, window_cfg)
 
+  -- And this is taken from mini.files
   api.nvim_set_option_value('wrap', false, { win = M.winid })
   api.nvim_set_option_value('concealcursor', 'nvic', { win = M.winid })
   api.nvim_set_option_value('conceallevel', 3, { win = M.winid })
