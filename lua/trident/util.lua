@@ -18,4 +18,8 @@ function M.debug(msg)
   M.notify(msg, vim.log.levels.DEBUG)
 end
 
+function M.trigger_event(event, data)
+  vim.api.nvim_exec_autocmds('User', { pattern = event, data = data })
+end
+
 return M

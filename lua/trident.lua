@@ -460,10 +460,6 @@ function M.file_write_data()
   assert(uv.fs_close(fd))
 end
 
-function M.trigger_event(event, data)
-  api.nvim_exec_autocmds('User', { pattern = event, data = data })
-end
-
 function Trident.toggle_menu()
   if M.winid ~= -1 and api.nvim_win_is_valid(M.winid) then
     M.menu_close()
@@ -471,7 +467,7 @@ function Trident.toggle_menu()
   end
   M.menu_buffer_create()
   M.menu_create_window()
-  M.trigger_event('TridentWindowOpen', { bufnr = M.bufnr, winid = M.winid })
+  require('trident.util').trigger_event('TridentWindowOpen', { bufnr = M.bufnr, winid = M.winid })
 end
 
 function Trident.add_file()
